@@ -510,6 +510,15 @@ class Llama4Model(LlamaModel):
                 # TODO: add EP support for non fused weights
                 pass
 
+            # Ensure tensor is contiguous on CPU before GPU transfer .
+            # Root cause: The logic above (lines 439-523) creates non-contiguous CPU
+            # tensors due to operations like transpose(-1, -2) and chunk(). When
+            # weight_loader calls _copy() from CPU->GPU on these non-contiguous
+            # tensors, each weight takes long time to transfer.
+            # Solution: Make the CPU tensor contiguous before the GPU transfer.
+            if not new_loaded_weight.is_contiguous():
+                new_loaded_weight = new_loaded_weight.contiguous()
+
             # Load the weight into the module parameter with corresponding
             # shard id and expert id.
             weight_loader(
